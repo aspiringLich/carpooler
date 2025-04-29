@@ -24,3 +24,19 @@
   }
 }
 @source "../node_modules/flowbite-svelte/dist";
+
+.h-modal {
+    z-index: 9999;
+}
+.fixed.inset-0 {
+    z-index: 9999;
+    @apply bg-black/15!;
+}
+
+b.hi {
+    @apply bg-amber-100;
+}
+
+b.dem {
+    @apply text-neutral-700 font-normal;
+}
