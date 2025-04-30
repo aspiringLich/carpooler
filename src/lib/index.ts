@@ -4,7 +4,7 @@ export class Data {
 	parents: Record<string, { data: { [key: string]: string }; children: string[]; address: number }>;
 	children: Record<string, { data: { [key: string]: string }; parents: string[]; address: number }>;
 	cars: { parents: string[]; address: number; capacity: number }[];
-	addresses: { lon: number; lat: number; name: string }[];
+	addresses: { x: number; y: number; name: string }[];
 
 	constructor() {
 		this.parents = {};
@@ -90,7 +90,7 @@ export class Data {
 
 		for (let i = 0; i < data.length - 1; i++) {
 			const row = data[i + 1];
-			
+
 			// process parents
 			const parent_names: string[] = [];
 			for (const [p, idx] of Object.entries(parent_idx)) {
@@ -129,7 +129,7 @@ export class Data {
 			}
 			// add children to parents
 			for (const pname of parent_names) d.parents[pname].children = child_names;
-			
+
 			// process cars
 			if (row[passenger_capacity_idx] !== '') {
 				const capacity = Number.parseInt(row[passenger_capacity_idx]);
@@ -139,14 +139,12 @@ export class Data {
 					capacity
 				});
 			}
-			
+
 			// process addresses
-			if (row[address_idx] === '') {
-				logThrow(`!Address for row ${i + 2} is blank!`);
-			}
+			if (row[address_idx] === '') logThrow(`!Address for row ${i + 2} is blank!`);
 			d.addresses.push({
-				lon: NaN,
-				lat: NaN,
+				x: NaN,
+				y: NaN,
 				name: row[address_idx]
 			});
 		}
@@ -154,4 +152,38 @@ export class Data {
 		console.log(d);
 		return d;
 	}
+}
+
+// thanks copilot
+export function areaOfBounds(bounds: [[number, number], [number, number]]): number {
+	const [southWest, northEast] = bounds;
+
+	// Convert latitude and longitude from degrees to radians
+	const toRadians = (deg: number) => (deg * Math.PI) / 180;
+
+	const lat1 = toRadians(southWest[0]);
+	const lon1 = toRadians(southWest[1]);
+	const lat2 = toRadians(northEast[0]);
+	const lon2 = toRadians(northEast[1]);
+
+	// Earth's radius in meters
+	const R = 6371000;
+
+	// Calculate the differences
+	const dLat = lat2 - lat1;
+	const dLon = lon2 - lon1;
+
+	// Calculate the area using the Haversine formula approximation
+	const a =
+		Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+		Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+	// Approximate the width and height of the bounding box in meters
+	const width = R * c * Math.abs(Math.cos((lat1 + lat2) / 2));
+	const height = R * c;
+
+	// Calculate the area of the bounding box
+	return width * height;
 }

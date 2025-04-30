@@ -1,20 +1,26 @@
 <script lang="ts">
-	import { Data } from '$lib';
+	import { areaOfBounds, Data } from '$lib';
 	import { Button, Modal, Label, Input } from 'flowbite-svelte';
 	import type { LatLngTuple } from 'leaflet';
 	import Papa from 'papaparse';
+	import type { EsriProvider } from 'leaflet-geosearch';
 
+	let provider: EsriProvider;
 	let L: typeof import('leaflet');
 	let map: L.Map | undefined;
 	let initialView: LatLngTuple = [40.716, -74.467];
 
 	async function createMap(container: HTMLElement) {
 		L = await import('leaflet');
+		const { EsriProvider } = await import('leaflet-geosearch');
+
+		provider = new EsriProvider();
 		map = L.map(container, { preferCanvas: true }).setView(initialView, 11);
 		// var searchControl = L.es/ri.Geocoding.geosearch().addTo(map);
 
 		L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-			attribution: `&copy;<a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>`,
+			attribution: `&copy;<a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>,
+		        &copy;<a href="https://carto.com/attributions" target="_blank">CARTO</a>`,
 			subdomains: 'abcd'
 		}).addTo(map);
 	}
@@ -34,6 +40,8 @@
 	let spreadsheet_id = $state('');
 	let valid_spreadsheet_id = $derived(spreadsheet_id.length == 44);
 
+	let data: Data | undefined;
+
 	let log = $state('');
 	$effect(() => {
 		if (!valid_spreadsheet_id) return;
@@ -45,11 +53,41 @@
 			complete: (sheet) => {
 				log += 'Successfully fetched google sheet\n';
 				console.log(sheet);
-				const data = sheet.data as string[][];
-				log += `${data[0].length} cols, ${data.length} rows\n`;
+				const sheet_data = sheet.data as string[][];
+				log += `${sheet_data[0].length} cols, ${sheet_data.length} rows\n`;
 
 				try {
-					let d = Data.fromSheetData(data, (s) => (log += s + '\n'));
+					data = Data.fromSheetData(sheet_data, (s) => (log += s + '\n'));
+
+					let errors = false;
+					Promise.all(
+						(data as Data).addresses.map((a) =>
+							(async () => {
+								const res = await provider.search({ query: a.name });
+								const bounds = res[0].bounds;
+								let area = 0;
+								if (bounds) area = areaOfBounds(bounds);
+
+								if (area > 1000000) {
+									log += `!Fetched bounds for '${a.name}' too large!\n!└ Using '${res[0].label}'\n`;
+									errors = true;
+								}
+
+								a.x = res[0].x;
+								a.y = res[0].y;
+							})()
+						)
+					)
+						.then(() => {
+							if (errors) {
+								log += '!Addresses fetched with some errors\n';
+							} else {
+								log += 'Addresses fetched successfully!\n';
+							}
+						})
+						.catch((e) => {
+							log += `!Error fetching addresses: ${e}\n`;
+						});
 				} catch (e) {
 					console.error(e);
 				}
@@ -91,7 +129,7 @@
 				<li><code>Address</code></li>
 			</ul>
 		</div>
-		<pre class="grow"><code
+		<pre class="flex flex-col overflow-auto"><code class="shrink basis-0"
 				>{#if !valid_spreadsheet_id}<span class="text-red-400"
 						>Waiting for valid Spreadsheet ID...</span
 					>{:else}<span class="text-green-400">Valid Spreadsheet ID detected</span>{/if}<br
