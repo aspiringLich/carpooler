@@ -1,9 +1,9 @@
 // place files you want to import through the `$lib` alias in this folder.
 
 export class Data {
-	parents: Record<string, { data: { [key: string]: string }; address: number }>;
+	parents: Record<string, { data: { [key: string]: string }; children: string[]; address: number }>;
 	children: Record<string, { data: { [key: string]: string }; parents: string[]; address: number }>;
-	cars: { parents: string[]; address: number }[];
+	cars: { parents: string[]; address: number; capacity: number }[];
 	addresses: { lon: number; lat: number; name: string }[];
 
 	constructor() {
@@ -69,23 +69,89 @@ export class Data {
 		if (passenger_capacity_idx == -1) logThrow('!No Passenger Capacity column set');
 		if (address_idx == -1) logThrow('!No Address column set');
 
-		const parent_data_idx: { [key: string]: [string, number] } = {};
-		const child_data_idx: { [key: string]: [string, number] } = {};
+		const parent_data_idx: { [key: string]: [string, number][] } = {};
+		const child_data_idx: { [key: string]: [string, number][] } = {};
 		for (let i = 0; i < headers.length; i++) {
 			const split = headers[i].trim().split(' ');
 			if (split.length >= 3 && split[0] == 'Parent') {
-				if (parent_idx[split[1]] === undefined) {
+				if (parent_idx[split[1]] === undefined)
 					logThrow(`!Unknown parent column: Parent ${split[1]} referenced in column ${i + 1}`);
-				}
-				parent_data_idx[split[1]] = [split.splice(2).join(' '), rmvCol(i)];
+				if (parent_data_idx[split[1]] === undefined) parent_data_idx[split[1]] = [];
+
+				parent_data_idx[split[1]].push([split.splice(2).join(' '), rmvCol(i)]);
 			} else if (split.length >= 3 && split[0] == 'Child') {
-				if (child_idx[split[1]] === undefined) {
+				if (child_idx[split[1]] === undefined)
 					logThrow(`!Unknown child column: Child ${split[1]} referenced in column ${i + 1}`);
-				}
-				child_data_idx[split[1]] = [split.splice(2).join(' '), rmvCol(i)];
+				if (child_data_idx[split[1]] === undefined) child_data_idx[split[1]] = [];
+
+				child_data_idx[split[1]].push([split.splice(2).join(' '), rmvCol(i)]);
 			}
 		}
 
+		for (let i = 0; i < data.length - 1; i++) {
+			const row = data[i + 1];
+			
+			// process parents
+			const parent_names: string[] = [];
+			for (const [p, idx] of Object.entries(parent_idx)) {
+				const name = row[idx];
+				const data_idx = parent_data_idx[p];
+
+				if (name === '') continue;
+
+				parent_names.push(name);
+				d.parents[name] = {
+					data: {},
+					address: i,
+					children: []
+				};
+				for (const [datapt, idx] of data_idx) {
+					d.parents[name].data[datapt] = row[idx];
+				}
+			}
+			// process children
+			const child_names: string[] = [];
+			for (const [c, idx] of Object.entries(child_idx)) {
+				const name = row[idx];
+				const data_idx = child_data_idx[c];
+
+				if (name === '') continue;
+
+				child_names.push(name);
+				d.children[name] = {
+					data: {},
+					address: i,
+					parents: parent_names
+				};
+				for (const [datapt, idx] of data_idx) {
+					d.children[name].data[datapt] = row[idx];
+				}
+			}
+			// add children to parents
+			for (const pname of parent_names) d.parents[pname].children = child_names;
+			
+			// process cars
+			if (row[passenger_capacity_idx] !== '') {
+				const capacity = Number.parseInt(row[passenger_capacity_idx]);
+				d.cars.push({
+					parents: parent_names,
+					address: i,
+					capacity
+				});
+			}
+			
+			// process addresses
+			if (row[address_idx] === '') {
+				logThrow(`!Address for row ${i + 2} is blank!`);
+			}
+			d.addresses.push({
+				lon: NaN,
+				lat: NaN,
+				name: row[address_idx]
+			});
+		}
+
+		console.log(d);
 		return d;
 	}
 }
