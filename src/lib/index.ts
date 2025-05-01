@@ -1,6 +1,6 @@
 // place files you want to import through the `$lib` alias in this folder.
 
-type Address = { x: number; y: number; name: string; err: null };
+type Address = { x: number; y: number; name: string; err: null; car?: number; };
 
 export class Data {
 	parents: Record<string, { data: { [key: string]: string }; children: string[]; address: number }>;
@@ -133,7 +133,8 @@ export class Data {
 			for (const pname of parent_names) d.parents[pname].children = child_names;
 
 			// process cars
-			if (row[passenger_capacity_idx] !== '') {
+            const car = row[passenger_capacity_idx] !== '';
+			if (car) {
 				const capacity = Number.parseInt(row[passenger_capacity_idx]);
 				d.cars.push({
 					parents: parent_names,
@@ -148,7 +149,8 @@ export class Data {
 				x: NaN,
 				y: NaN,
 				name: row[address_idx],
-				err: null
+				err: null,
+				car: car ? i : undefined,
 			});
 		}
 
