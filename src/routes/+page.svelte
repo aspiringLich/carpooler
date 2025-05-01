@@ -1,20 +1,19 @@
 <script lang="ts">
-	import { areaOfBounds, Data } from '$lib';
+	import { Data } from '$lib';
 	import { Button, Modal, Label, Input } from 'flowbite-svelte';
 	import type { LatLngTuple } from 'leaflet';
 	import Papa from 'papaparse';
-	import type { EsriProvider } from 'leaflet-geosearch';
+	import type { Icons } from '$lib/icons';
 
-	let provider: EsriProvider;
 	let L: typeof import('leaflet');
+	let icons: Icons;
 	let map: L.Map | undefined;
 	let initialView: LatLngTuple = [40.716, -74.467];
 
 	async function createMap(container: HTMLElement) {
 		L = await import('leaflet');
-		const { EsriProvider } = await import('leaflet-geosearch');
+		icons = (await import('$lib/icons')).icons;
 
-		provider = new EsriProvider();
 		map = L.map(container, { preferCanvas: true }).setView(initialView, 11);
 		// var searchControl = L.es/ri.Geocoding.geosearch().addTo(map);
 
@@ -37,7 +36,7 @@
 	}
 
 	let import_modal = $state(false);
-	let spreadsheet_id = $state('');
+	let spreadsheet_id = $state('1hvBg67mKg6UhAgddJsF5Ty9dre1akhqy2_KtmUtAiW4');
 	let valid_spreadsheet_id = $derived(spreadsheet_id.length == 44);
 
 	let data: Data | undefined;
@@ -57,35 +56,23 @@
 				log += `${sheet_data[0].length} cols, ${sheet_data.length} rows\n`;
 
 				try {
-					data = Data.fromSheetData(sheet_data, (s) => (log += s + '\n'));
+					const add_to_log = (s: string) => (log += s + '\n');
+					data = Data.fromSheetData(sheet_data, add_to_log);
 
-					let errors = false;
-					Promise.all(
-						(data as Data).addresses.map((a) =>
-							(async () => {
-								const res = await provider.search({ query: a.name });
-								const bounds = res[0].bounds;
-								let area = 0;
-								if (bounds) area = areaOfBounds(bounds);
-
-								if (area > 1000000) {
-									log += `!Fetched bounds for '${a.name}' too large!\n!└ Using '${res[0].label}'\n`;
-									errors = true;
-								}
-
-								a.x = res[0].x;
-								a.y = res[0].y;
-							})()
-						)
-					)
+					data
+						?.fetchAddresses(add_to_log)
 						.then(() => {
-							if (errors) {
-								log += '!Addresses fetched with some errors\n';
-							} else {
-								log += 'Addresses fetched successfully!\n';
-							}
+							if (data?.addresses.find((a) => a.err))
+								log += '!Addresses fetched with some errors!\n';
+							else log += 'Addresses fetched successfully!\n';
+
+							data?.addresses.map((a) => {
+								if (map) L.marker([a.y, a.x], { title: a.name, icon: icons.markerBlue }).addTo(map);
+								else throw 'Map not initialized';
+							});
 						})
 						.catch((e) => {
+							console.error(e);
 							log += `!Error fetching addresses: ${e}\n`;
 						});
 				} catch (e) {
@@ -132,9 +119,10 @@
 		<pre class="flex flex-col overflow-auto"><code class="shrink basis-0"
 				>{#if !valid_spreadsheet_id}<span class="text-red-400"
 						>Waiting for valid Spreadsheet ID...</span
-					>{:else}<span class="text-green-400">Valid Spreadsheet ID detected</span>{/if}<br
+					>{:else}<span class="text-lime-400">Valid Spreadsheet ID detected</span>{/if}<br
 				/>{#each log.split('\n') as line, i (i)}{#if line[0] == '!'}<span class="text-red-400"
 							>{line.slice(1)}</span
+						>{:else if line[0] == '}'}<span class="text-amber-400">{line.slice(1)}</span
 						>{:else}{line}{/if}<br />{/each}</code
 			></pre>
 	</div>

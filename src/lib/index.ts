@@ -1,10 +1,12 @@
 // place files you want to import through the `$lib` alias in this folder.
 
+type Address = { x: number; y: number; name: string; err: null };
+
 export class Data {
 	parents: Record<string, { data: { [key: string]: string }; children: string[]; address: number }>;
 	children: Record<string, { data: { [key: string]: string }; parents: string[]; address: number }>;
 	cars: { parents: string[]; address: number; capacity: number }[];
-	addresses: { x: number; y: number; name: string }[];
+	addresses: Address[];
 
 	constructor() {
 		this.parents = {};
@@ -145,12 +147,35 @@ export class Data {
 			d.addresses.push({
 				x: NaN,
 				y: NaN,
-				name: row[address_idx]
+				name: row[address_idx],
+				err: null
 			});
 		}
 
 		console.log(d);
 		return d;
+	}
+
+	async fetchAddresses(addToLog: (add: string) => void) {
+		const { EsriProvider } = await import('leaflet-geosearch');
+		const provider = new EsriProvider();
+
+		await Promise.all(
+			this.addresses.map((a) =>
+				(async () => {
+					const res = await provider.search({ query: a.name });
+					const bounds = res[0].bounds;
+					let area = 0;
+					if (bounds) area = areaOfBounds(bounds);
+
+					if (area > 500000) {
+						addToLog(`}WARN: Fetched bounds for '${a.name}' too large! Possible mismatch.\n} └─(Fetched '${res[0].label}')`);
+					}
+					a.x = res[0].x;
+					a.y = res[0].y;
+				})()
+			)
+		);
 	}
 }
 
