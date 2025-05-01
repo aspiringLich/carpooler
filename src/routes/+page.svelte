@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { Data } from '$lib';
 	import { Button, Modal, Label, Input } from 'flowbite-svelte';
-	import { InfoCircleOutline } from 'flowbite-svelte-icons';
+	import { InfoCircleOutline, ArrowLeftOutline, ArrowRightOutline } from 'flowbite-svelte-icons';
 	import type { LatLngTuple } from 'leaflet';
 	import Papa from 'papaparse';
 	import type { Icons } from '$lib/icons';
 	import { local_store } from '$lib/local_store';
+	import type { GeoSearchControl } from 'leaflet-geosearch';
 
 	let L: typeof import('leaflet');
 	let icons: Icons;
@@ -16,15 +17,16 @@
 	async function createMap(container: HTMLElement) {
 		L = await import('leaflet');
 		icons = (await import('$lib/icons')).icons;
+		const { GeoSearchControl, EsriProvider } = await import('leaflet-geosearch');
 
 		map = L.map(container, { preferCanvas: true }).setView(initialView, 11);
-		// var searchControl = L.es/ri.Geocoding.geosearch().addTo(map);
 
 		L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
 			attribution: `&copy;<a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>,
 		        &copy;<a href="https://carto.com/attributions" target="_blank">CARTO</a>`,
 			subdomains: 'abcd'
 		}).addTo(map);
+		map.addControl(new (GeoSearchControl as any)({ style: 'bar', provider: new EsriProvider(), showMarker: false })); // eslint-disable-line
 	}
 
 	function mapAction(container: HTMLElement) {
@@ -44,11 +46,14 @@
 	let valid_spreadsheet_id = $derived($spreadsheet_id.length == 44);
 
 	let data: Data | undefined;
+	let data_key = $state(false);
 
 	let log = $state('');
 	$effect(() => {
 		if (!valid_spreadsheet_id) return;
 		log = '';
+		Object.values(markers).forEach((marker) => marker.remove());
+		markers = {};
 
 		Papa.parse(`https://docs.google.com/spreadsheets/d/${$spreadsheet_id}/export?format=csv`, {
 			download: true,
@@ -73,9 +78,9 @@
 							let i = 0;
 							data?.addresses.map((a) => {
 								if (map) {
-									markers[i++] = L.marker([a.y, a.x], {
+									markers[i] = L.marker([a.y, a.x], {
 										title: a.name,
-										icon: a.car === undefined ? icons.markerBlue : icons.markerBlueHollow
+										icon: icons.getIcon(data as Data, i, i++ == data.cars[0].address)
 									}).addTo(map);
 								} else throw 'Map not initialized';
 							});
@@ -87,11 +92,28 @@
 				} catch (e) {
 					console.error(e);
 				}
+				data_key = true;
+				selectedCar = 0;
+				prevCar = 0;
 			},
 			error: () => {
 				log += '!Error fetching google sheet\n';
 			}
 		});
+	});
+
+	let selectedCar = $state(0);
+	let prevCar = 0;
+	$effect(() => {
+		let s = selectedCar; // svelte doesnt detect selectedCar if we just index with it >:(
+		let address = data?.cars[selectedCar + s - s].address;
+		if (data && address !== undefined) {
+			markers[address].setIcon(icons.getIcon(data, address, true));
+
+			const prevAddress = data.cars[prevCar].address;
+			markers[prevAddress].setIcon(icons.getIcon(data, prevAddress, false));
+			prevCar = selectedCar;
+		}
 	});
 </script>
 
@@ -124,6 +146,10 @@
 				<li class="my-0!"><code>Child [Y] [INFO]</code></li>
 				<li class="my-0!"><code>Address</code></li>
 			</ul>
+			<p>
+				You can replace <code>[X], [Y]</code> with identifiers for each parent/child column group,
+				and <code>[INFO]</code> with additional information columns you would like to be displayed.
+			</p>
 		</div>
 		<pre class="flex flex-col overflow-auto"><code class="shrink basis-0"
 				>{#if !valid_spreadsheet_id}<span class="text-red-400"
@@ -136,15 +162,19 @@
 			></pre>
 	</div>
 </Modal>
-
 <Modal class="prose prose-p:my-2" bind:open={$info_modal} autoclose outsideclose>
-    <p>The <b>Blue Markers</b> represent addresses which have residents that have not been allocated to a car.</p>
-    <p>The <b>Green Markers</b> represent addresses in which all residents have been allocated to a car.</p>
-    <p>The <b>Hollow Markers</b> represent addresses that have cars.</p>
+	<p>
+		The <b>Blue Markers</b> represent addresses which have residents that have not been allocated to
+		a car.
+	</p>
+	<p>
+		The <b>Green Markers</b> represent addresses in which all residents have been allocated to a car.
+	</p>
+	<p>The <b>Hollow Markers</b> represent addresses that have cars.</p>
 </Modal>
 
 <div class="flex flex-row">
-	<div class="basis-64 p-4 lg:basis-96">
+	<div class="flex basis-64 flex-col p-4 lg:basis-96">
 		<div class="flex items-stretch">
 			<Button
 				class="grow rounded-r-none"
@@ -157,10 +187,42 @@
 				<InfoCircleOutline />
 			</Button>
 		</div>
-		<!-- <div class="flex flex-col gap-2">
-			<Button>Button</Button>
-			<Button>Button</Button>
-		</div> -->
+		<div class="my-2 flex items-center justify-around">
+			<Button
+				class="p-2"
+				color="alternative"
+				on:click={() => (selectedCar -= +(selectedCar > 0))}
+				disabled={selectedCar <= 0}
+			>
+				<ArrowLeftOutline />
+			</Button>
+			<p class="grow text-center">Car {selectedCar + 1}</p>
+			<Button
+				class="p-2"
+				color="alternative"
+				on:click={() => (selectedCar += data ? +(selectedCar < data.cars.length - 1) : 0)}
+				disabled={selectedCar >= (data ? data.cars.length - 1 : Infinity)}
+			>
+				<ArrowRightOutline />
+			</Button>
+		</div>
+		<div class="flex shrink flex-col overflow-scroll">
+			{#key data_key}
+				{@const car = data?.cars[selectedCar]}
+				<p class="mb-3 text-lg text-neutral-700">{data?.addresses[car?.address || 0].name}</p>
+				{#if car?.parents}
+					{#each car.parents as parent (parent)}
+						{@const p = data?.parents[parent]}
+						<p class="mt-2 text-lg text-neutral-700">{parent}</p>
+						<ul>
+							{#each Object.entries(p?.data || {}) as [key, value] (key)}
+								<li class="text-neutral-600"><b>{key}:</b> {value}</li>
+							{/each}
+						</ul>
+					{/each}
+				{/if}
+			{/key}
+		</div>
 	</div>
 	<main class="h-[100vh] grow" use:mapAction></main>
 </div>

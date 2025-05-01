@@ -43,7 +43,10 @@
        id="page3"
        margin="0"
        bleed="0"
-       inkscape:label="marker-blue" /><inkscape:page
+       inkscape:label="marker-blue"
+       inkscape:export-filename="marker-blue-hollow.png"
+       inkscape:export-xdpi="64"
+       inkscape:export-ydpi="64" /><inkscape:page
        x="130"
        y="0"
        width="120"

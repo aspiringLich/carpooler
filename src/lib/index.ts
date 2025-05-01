@@ -1,6 +1,6 @@
 // place files you want to import through the `$lib` alias in this folder.
 
-type Address = { x: number; y: number; name: string; err: null; car?: number; };
+type Address = { x: number; y: number; name: string; err: null; car?: number };
 
 export class Data {
 	parents: Record<string, { data: { [key: string]: string }; children: string[]; address: number }>;
@@ -133,7 +133,7 @@ export class Data {
 			for (const pname of parent_names) d.parents[pname].children = child_names;
 
 			// process cars
-            const car = row[passenger_capacity_idx] !== '';
+			const car = row[passenger_capacity_idx] !== '';
 			if (car) {
 				const capacity = Number.parseInt(row[passenger_capacity_idx]);
 				d.cars.push({
@@ -150,7 +150,7 @@ export class Data {
 				y: NaN,
 				name: row[address_idx],
 				err: null,
-				car: car ? i : undefined,
+				car: car ? i : undefined
 			});
 		}
 
@@ -171,7 +171,9 @@ export class Data {
 					if (bounds) area = areaOfBounds(bounds);
 
 					if (area > 500000) {
-						addToLog(`}WARN: Fetched bounds for '${a.name}' too large! Possible mismatch.\n} └─(Fetched '${res[0].label}')`);
+						addToLog(
+							`}WARN: Fetched bounds for '${a.name}' too large! Possible mismatch.\n} └─(Fetched '${res[0].label}')`
+						);
 					}
 					a.x = res[0].x;
 					a.y = res[0].y;
@@ -181,20 +183,18 @@ export class Data {
 	}
 }
 
+const toRadians = (deg: number) => (deg * Math.PI) / 180;
+// Earth's radius in meters
+const R = 6371000;
+
 // thanks copilot
 export function areaOfBounds(bounds: [[number, number], [number, number]]): number {
 	const [southWest, northEast] = bounds;
-
-	// Convert latitude and longitude from degrees to radians
-	const toRadians = (deg: number) => (deg * Math.PI) / 180;
 
 	const lat1 = toRadians(southWest[0]);
 	const lon1 = toRadians(southWest[1]);
 	const lat2 = toRadians(northEast[0]);
 	const lon2 = toRadians(northEast[1]);
-
-	// Earth's radius in meters
-	const R = 6371000;
 
 	// Calculate the differences
 	const dLat = lat2 - lat1;
@@ -213,4 +213,25 @@ export function areaOfBounds(bounds: [[number, number], [number, number]]): numb
 
 	// Calculate the area of the bounding box
 	return width * height;
+}
+
+// thanks copilot
+export function distanceBetweenPoints(
+	lat1: number,
+	lon1: number,
+	lat2: number,
+	lon2: number
+): number {
+	const φ1 = toRadians(lat1);
+	const φ2 = toRadians(lat2);
+	const Δφ = toRadians(lat2 - lat1);
+	const Δλ = toRadians(lon2 - lon1);
+
+	const a =
+		Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+		Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+
+	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+	return R * c; // Distance in meters
 }
