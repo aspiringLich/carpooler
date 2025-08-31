@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Data } from '$lib';
-	import { Button, Modal, Label, Input } from 'flowbite-svelte';
+	import { Button, Modal, Label, Input, Card } from 'flowbite-svelte';
 	import { InfoCircleOutline, ArrowLeftOutline, ArrowRightOutline } from 'flowbite-svelte-icons';
 	import type { LatLngTuple } from 'leaflet';
 	import Papa from 'papaparse';
@@ -8,6 +8,7 @@
 	import { local_store } from '$lib/local_store';
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	import type { GeoSearchControl } from 'leaflet-geosearch';
+	import type { Writable } from 'svelte/store';
 
 	let L: typeof import('leaflet');
 	let icons: Icons;
@@ -51,11 +52,52 @@
 	let import_modal = local_store('import_modal', false);
 	let info_modal = local_store('info_modal', false);
 	let spreadsheet_id = local_store('spreadsheet_id', '');
+	let allocation: Writable<string[][]> = local_store('allocation', []);
+	let total_allocated: Set<string> = new Set();
+
 	let valid_spreadsheet_id = $derived($spreadsheet_id.length == 44);
 
 	let data: Data | undefined = $state();
-
 	let log = $state('');
+
+	function onDataFetch(data: Data) {
+		if ($allocation.length !== data.cars.length) {
+			if ($allocation.length !== 0) {
+				log += 'number of cars changed... resetting car allocation data\n';
+				$allocation = [];
+				total_allocated.clear();
+			} else {
+				log += 'Generating car allocation data\n';
+			}
+
+			// initialize and assign children to their respective cars
+			for (let i = 0; i < data.cars.length; i++) {
+				const address = data.addresses[data.cars[i].address];
+				let children = address.children.splice(0, address.children.length);
+				$allocation.push(children);
+				children.forEach((child) => total_allocated.add(child));
+			}
+			allocation.update((prev) => {
+				return prev;
+			});
+		} else {
+			log += 'Reusing locally saved car allocation data\n';
+			$allocation.forEach((children) => {
+				children.forEach((child) => total_allocated.add(child));
+			});
+		}
+
+		let i = 0;
+		data.addresses.map((a) => {
+			if (map) {
+				markers[i] = L.marker([a.y, a.x], {
+					title: a.name,
+					icon: icons.getIcon(data as Data, total_allocated, i, i++ == data?.cars[0].address)
+				}).addTo(map);
+			} else throw 'Map not initialized';
+		});
+	}
+
 	$effect(() => {
 		if (!valid_spreadsheet_id) return;
 		log = '';
@@ -82,25 +124,16 @@
 								log += '!Addresses fetched with some errors!\n';
 							else log += 'Addresses fetched successfully!\n';
 
-							let i = 0;
-							data?.addresses.map((a) => {
-								if (map) {
-									markers[i] = L.marker([a.y, a.x], {
-										title: a.name,
-										icon: icons.getIcon(data as Data, i, i++ == data?.cars[0].address)
-									}).addTo(map);
-								} else throw 'Map not initialized';
-							});
+							onDataFetch(data!);
 						})
 						.catch((e) => {
 							console.error(e);
-							log += `!Error fetching addresses: ${e}\n`;
+							log += `${e}\n`;
 						});
 				} catch (e) {
 					console.error(e);
 				}
 				selectedCar = 0;
-
 			},
 			error: () => {
 				log += '!Error fetching google sheet\n';
@@ -108,18 +141,24 @@
 		});
 	});
 
+	function updateIcon(address: number | undefined, big?: boolean) {
+		if (data && address !== undefined && markers?.[address]) {
+			markers[address].setIcon(icons.getIcon(data, total_allocated, address, big ?? false));
+		}
+	}
+
 	let selectedCar = $state(0);
 	let prevCar = 0;
 	$effect(() => {
-		let s = selectedCar; // svelte doesnt detect selectedCar if we just index with it >:(
-		let address = data?.cars[selectedCar + s - s].address;
-		if (data && address !== undefined && markers[address]) {
-			markers[address].setIcon(icons.getIcon(data, address, true));
+		if (!data) return;
 
-			const prevAddress = data.cars[prevCar].address;
-			markers[prevAddress].setIcon(icons.getIcon(data, prevAddress, false));
-			prevCar = selectedCar;
-		}
+		let s = selectedCar; // svelte doesnt detect selectedCar if we just index with it >:(
+		let address = data.cars[selectedCar + s - s].address;
+
+		updateIcon(address, true);
+		const prevAddress = data.cars[prevCar].address;
+		updateIcon(prevAddress, false);
+		prevCar = selectedCar;
 	});
 </script>
 
@@ -215,34 +254,35 @@
 			</Button>
 		</div>
 		<div class="flex shrink flex-col overflow-scroll">
-			<p class="mb-3 text-lg text-neutral-700">{data?.addresses[data?.cars[selectedCar]?.address || 0].name}</p>
-			<!-- SHOW PARENTS -->
-			{#if data?.cars[selectedCar]?.parents}
-				{#each data?.cars[selectedCar].parents as parent (parent)}
-					{@const p = data?.parents[parent]}
-					<p class="mt-2 text-lg text-neutral-700">{parent}</p>
-					<ul>
-						{#each Object.entries(p?.data || {}) as [key, value] (key)}
-							<li class="text-neutral-600"><b>{key}:</b> {value}</li>
-						{/each}
-					</ul>
-				{/each}
-			{/if}
-			<hr class="my-4" />
-			{#if data?.cars[selectedCar]?.capacity}
-			    <!-- CAPACITY -->
-			    {@const car = data.cars[selectedCar]}
-				<p class="text-lg"><b>Seats:</b> {car.allocated.size} / {car.capacity}</p>
+			<Card class="h-56 overflow-y-scroll">
+				<p class="text-lg text-neutral-700">
+					{data?.addresses[data?.cars[selectedCar]?.address || 0].name}
+				</p>
+				<!-- SHOW PARENTS -->
+				{#if data?.cars[selectedCar]?.parents}
+					{#each data?.cars[selectedCar].parents as parent (parent)}
+						{@const p = data?.parents[parent]}
+						<p class="mt-2 text-lg text-neutral-700">{parent}</p>
+						<ul>
+							{#each Object.entries(p?.data || {}) as [key, value] (key)}
+								<li class="text-neutral-600"><b>{key}:</b> {value}</li>
+							{/each}
+						</ul>
+					{/each}
+				{/if}
+			</Card>
+			{#if $allocation[selectedCar] && data?.cars[selectedCar] && $allocation}
+				<!-- CAPACITY -->
+				{@const car = data.cars[selectedCar]}
+				<p class="text-lg"><b>Seats:</b> {$allocation[selectedCar].length} / {car.capacity}</p>
 
 				<!-- SHOW ALLOCATED SEATS -->
-				{#each car.allocated as child (child)}
+				{#each $allocation[selectedCar] as child (child)}
 					<p class="text-neutral-700 select-none">{child}</p>
 				{/each}
-				
+
 				<!-- SHOW CARDS FOR CLOSEST CHILDREN -->
-				<div class="mt-4 overflow-y-scroll">
-				
-				</div>
+				<div class="mt-4 overflow-y-scroll"></div>
 			{/if}
 		</div>
 	</div>

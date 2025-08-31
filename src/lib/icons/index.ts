@@ -33,11 +33,13 @@ export const icons = {
 		markerGreenHollow: makeMarkerBig(markerGreenHollow)
 	},
 
-	getIcon: (d: Data, address: number, big?: boolean) => {
+	getIcon: (d: Data, allocated: Set<string>, address: number, big?: boolean) => {
 		const a = d.addresses[address];
 		const i = big ? icons.big : icons;
-        if (a.car !== undefined) return i.markerBlueHollow;
-        else if (a) return i.markerBlue;
+		const full = a.children.every(c => allocated.has(c));
+
+        if (a.car !== undefined) return full ? i.markerGreenHollow : i.markerBlueHollow;
+        else if (a) return full ? i.markerGreen : i.markerBlue;
         else return i.markerError;
 	}
 };

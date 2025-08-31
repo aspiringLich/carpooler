@@ -1,20 +1,30 @@
 // place files you want to import through the `$lib` alias in this folder.
 
-type Address = { x: number; y: number; name: string; err: null; car?: number };
+type Address = {
+	x: number;
+	y: number;
+	name: string;
+	err: null;
+	car?: number;
+	children: string[];
+	parents: string[];
+};
 
 export class Data {
 	parents: Record<string, { data: { [key: string]: string }; children: string[]; address: number }>;
 	children: Record<string, { data: { [key: string]: string }; parents: string[]; address: number }>;
-    cars: { parents: string[]; address: number; capacity: number; allocated: Set<string> }[];
+	cars: { parents: string[]; address: number; capacity: number }[];
 	addresses: Address[];
-    allocated: Set<string>;
+    child_names: Set<string>;
+    parent_names: Set<string>;
 
 	constructor() {
 		this.parents = {};
 		this.children = {};
 		this.cars = [];
 		this.addresses = [];
-        this.allocated = new Set<string>();
+		this.child_names = new Set<string>();
+		this.parent_names = new Set<string>();
 	}
 
 	static fromSheetData(data: string[][], addToLog: (add: string) => void): Data | undefined {
@@ -102,12 +112,14 @@ export class Data {
 				const data_idx = parent_data_idx[p];
 
 				if (name === '') continue;
-				if (d.parents[name]) {
+
+				if (d.parent_names.has(name)) {
 					addToLog(`}WARN: Parent ${name} duplicated! Skipping repeat occurrence...`);
 					continue;
 				}
-
 				parent_names.push(name);
+				d.parent_names.add(name);
+				
 				d.parents[name] = {
 					data: {},
 					address: i,
@@ -124,12 +136,14 @@ export class Data {
 				const data_idx = child_data_idx[c];
 
 				if (name === '') continue;
-				if (d.children[name]) {
+				
+				if (d.child_names.has(name)) {
 					addToLog(`}WARN: Child ${name} duplicated! Skipping repeat occurrence...`);
 					continue;
 				}
-
 				child_names.push(name);
+				d.child_names.add(name);
+
 				d.children[name] = {
 					data: {},
 					address: i,
@@ -146,14 +160,11 @@ export class Data {
 			const car = row[passenger_capacity_idx] !== '';
 			if (car) {
 				const capacity = Number.parseInt(row[passenger_capacity_idx]);
-                const allocated = new Set<string>(child_names.slice(0, capacity));
 				d.cars.push({
 					parents: parent_names,
 					address: i,
 					capacity,
-					allocated
 				});
-				d.allocated = d.allocated.union(allocated);
 			}
 
 			// process addresses
@@ -163,7 +174,9 @@ export class Data {
 				y: NaN,
 				name: row[address_idx],
 				err: null,
-				car: car ? i : undefined
+				car: car ? i : undefined,
+				children: child_names,
+				parents: parent_names
 			});
 		}
 
