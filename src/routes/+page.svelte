@@ -60,7 +60,19 @@
 	let info_modal = local_store('info_modal', false);
 	let spreadsheet_id = local_store('spreadsheet_id', '');
 	let allocation: Writable<string[][]> = local_store('allocation', []);
-	let total_allocated: Set<string> = new Set();
+	let total_allocated: Set<string> = $state(new Set());
+	
+		let first = false;
+	spreadsheet_id.subscribe((id) => {
+		if (!first) {
+			first = true;
+		} else {
+			allocation.set([]);
+			total_allocated = new Set();
+		}
+	});
+
+	let update = $state(0);
 
 	let valid_spreadsheet_id: Writable<boolean> = $derived($spreadsheet_id.length == 44);
 
@@ -72,7 +84,6 @@
 			if ($allocation.length !== 0) {
 				log += 'number of cars changed... resetting car allocation data\n';
 				$allocation = [];
-				total_allocated.clear();
 			} else {
 				log += 'Generating car allocation data\n';
 			}
@@ -132,6 +143,9 @@
 							else log += 'Addresses fetched successfully!\n';
 
 							onDataFetch(data!);
+							// HACK to force svelte to update
+							selectedCar = 1;
+							selectedCar = 0;
 						})
 						.catch((e) => {
 							console.error(e);
@@ -185,11 +199,48 @@
 	});
 
 	function mouseenter(address: number) {
-		markers[address].setOpacity(0.8);
+		markers[address]?.setOpacity(0.3);
 	}
 
 	function mouseleave(address: number) {
-		markers[address].setOpacity(1.0);
+		markers[address]?.setOpacity(1.0);
+	}
+
+	function addchild(child: string) {
+		if (data && $allocation[selectedCar].length < data.cars[selectedCar].capacity) {
+			allocation.update((prev) => {
+				prev[selectedCar].push(child);
+				return prev;
+			});
+			total_allocated.add(child);
+			update++;
+
+			const address = data.children[child].address;
+			markers[address]?.setIcon(icons.getIcon(data, total_allocated, address));
+		}
+	}
+
+	function removechild(child: string) {
+		if (!data) return;
+		let idx = $allocation[selectedCar].indexOf(child);
+		if (idx != -1)
+			allocation.update((prev) => {
+				prev[selectedCar].splice(idx, 1);
+				return prev;
+			});
+
+		total_allocated.delete(child);
+		update++;
+
+		const address = data.children[child].address;
+		markers[address]?.setIcon(icons.getIcon(data, total_allocated, address));
+	}
+
+	function distanceFormat(distance: number): string {
+		if (distance < 100) {
+			return distance.toFixed(0) + 'm';
+		}
+		return (distance / 1000).toFixed(2) + 'km';
 	}
 </script>
 
@@ -303,55 +354,67 @@
 		</Card>
 	</div>
 	<div class="flex-pass px-2">
-		{#if $allocation[selectedCar] && data?.cars[selectedCar] && $allocation}
-			{@const car = data.cars[selectedCar]}
-			<!-- CAPACITY -->
-			<p class="text-lg"><b>Seats:</b> {$allocation[selectedCar].length} / {car.capacity}</p>
-			<!-- SHOW ALLOCATED SEATS -->
-			{#each $allocation[selectedCar] as child (child)}
-			    {@const address = data.children[child].address}
-				<Card
-					class="my-1 flex flex-row bg-neutral-100 p-0! shadow-none"
-					on:mouseenter={() => mouseenter(address)}
-					on:mouseleave={() => mouseleave(address)}
-				>
-					<div class="min-w-0 grow p-2">
-						<h3 class="min-w-0 font-bold text-nowrap text-ellipsis text-neutral-800">
-							{child}
-						</h3>
-						<p class="min-w-0 overflow-hidden text-nowrap text-ellipsis text-neutral-800">
-							{data.addresses[address].name}
-						</p>
-					</div>
-					<Button class="basis-0 px-2 " color="alternative">
-						<ArrowDownOutline />
-					</Button>
-				</Card>
-			{/each}
-
-			<!-- SHOW CLOSEST CHILDREN -->
-			{#each closestChildren as child (child)}
-				{#if !total_allocated.has(child.name)}
+		{#key update}
+			{#if $allocation[selectedCar] && data?.cars[selectedCar] && $allocation}
+				{@const car = data.cars[selectedCar]}
+				<!-- CAPACITY -->
+				<p class="text-lg"><b>Seats:</b> {$allocation[selectedCar].length} / {car.capacity}</p>
+				<!-- SHOW ALLOCATED SEATS -->
+				{#each $allocation[selectedCar] as child (child)}
+					{@const address = data.children[child].address}
 					<Card
-						class="my-1 flex flex-row p-0! shadow-none"
-						on:mouseenter={() => mouseenter(child.address)}
-						on:mouseleave={() => mouseleave(child.address)}
+						class="my-1 flex flex-row bg-neutral-100 p-0! shadow-none"
+						on:mouseenter={() => mouseenter(address)}
+						on:mouseleave={() => mouseleave(address)}
 					>
 						<div class="min-w-0 grow p-2">
 							<h3 class="min-w-0 font-bold text-nowrap text-ellipsis text-neutral-800">
-								{child.name}
+								{child}
 							</h3>
 							<p class="min-w-0 overflow-hidden text-nowrap text-ellipsis text-neutral-800">
-								{data.addresses[child.address].name}
+								{data.addresses[address].name}
 							</p>
 						</div>
-						<Button class="basis-0 px-2 " color="alternative">
-							<ArrowUpOutline />
+						<Button class="basis-0 px-2 " color="alternative" on:click={() => removechild(child)}>
+							<ArrowDownOutline />
 						</Button>
 					</Card>
-				{/if}
-			{/each}
-		{/if}
+				{/each}
+
+				<!-- SHOW CLOSEST CHILDREN -->
+				{#each closestChildren as child (child)}
+					{#if total_allocated && !total_allocated.has(child.name)}
+						<Card
+							class="my-1 flex flex-row p-0! shadow-none"
+							on:mouseenter={() => mouseenter(child.address)}
+							on:mouseleave={() => mouseleave(child.address)}
+						>
+							<div class="grid min-w-0 grow grid-cols-[1fr_auto] p-2">
+								<h3 class="min-w-0 font-bold text-nowrap text-ellipsis text-neutral-800">
+									{child.name}
+								</h3>
+								<span>
+									{distanceFormat(child.distance)}
+								</span>
+								<p
+									class="col-span-2 min-w-0 overflow-hidden text-nowrap text-ellipsis text-neutral-800"
+								>
+									{data.addresses[child.address].name}
+								</p>
+							</div>
+							<Button
+								class="basis-0 px-2 "
+								color="alternative"
+								on:click={() => addchild(child.name)}
+								disabled={$allocation[selectedCar].length >= car.capacity}
+							>
+								<ArrowUpOutline />
+							</Button>
+						</Card>
+					{/if}
+				{/each}
+			{/if}
+		{/key}
 	</div>
 	<main class="row-span-5 h-[100vh] grow" use:mapAction></main>
 </div>
