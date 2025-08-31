@@ -58,12 +58,13 @@
 
 	let import_modal = local_store('import_modal', false);
 	let info_modal = local_store('info_modal', false);
+	let welcome_modal = $state(true);
 	let spreadsheet_id = local_store('spreadsheet_id', '');
 	let allocation: Writable<string[][]> = local_store('allocation', []);
 	let total_allocated: Set<string> = $state(new Set());
-	
-		let first = false;
-	spreadsheet_id.subscribe((id) => {
+
+	let first = false;
+	spreadsheet_id.subscribe(() => {
 		if (!first) {
 			first = true;
 		} else {
@@ -74,7 +75,7 @@
 
 	let update = $state(0);
 
-	let valid_spreadsheet_id: Writable<boolean> = $derived($spreadsheet_id.length == 44);
+	let valid_spreadsheet_id = $derived($spreadsheet_id.length == 44);
 
 	let data: Data | undefined = $state();
 	let log = $state('');
@@ -300,6 +301,22 @@
 		The <b>Green Markers</b> represent addresses in which all residents have been allocated to a car.
 	</p>
 	<p>The <b>Hollow Markers</b> represent addresses that have cars.</p>
+</Modal>
+<!-- INFO MODAL main page -->
+<Modal class="prose prose-p:my-2" bind:open={welcome_modal} autoclose outsideclose>
+	<h1>Carpooler</h1>
+	<p>
+		This is a project created by me (<a href="https://github.com/aspiringLich" target="_blank"
+			>Brandon Li</a
+		>) for the Ridge High School forensics team to help with assigning carpooling. If there are any
+		issues or concerns, please contact me at
+		<a href="mailto:brandonli@bcli.dev" target="_blank">brandonli@bcli.dev</a>.
+	</p>
+	<p>
+		To see an example google sheet, please use the google sheet ID <code
+			>1hvBg67mKg6UhAgddJsF5Ty9dre1akhqy2_KtmUtAiW4</code
+		>
+	</p>
 </Modal>
 
 <div
