@@ -2,41 +2,45 @@
 @plugin '@tailwindcss/typography';
 @plugin 'flowbite/plugin';
 
-
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --color-primary-50: #fff5f2;
-  --color-primary-100: #fff1ee;
-  --color-primary-200: #ffe4de;
-  --color-primary-300: #ffd5cc;
-  --color-primary-400: #ffbcad;
-  --color-primary-500: #fe795d;
-  --color-primary-600: #ef562f;
-  --color-primary-700: #eb4f27;
-  --color-primary-800: #cc4522;
-  --color-primary-900: #a5371b;
+	--color-primary-50: #fff5f2;
+	--color-primary-100: #fff1ee;
+	--color-primary-200: #ffe4de;
+	--color-primary-300: #ffd5cc;
+	--color-primary-400: #ffbcad;
+	--color-primary-500: #fe795d;
+	--color-primary-600: #ef562f;
+	--color-primary-700: #eb4f27;
+	--color-primary-800: #cc4522;
+	--color-primary-900: #a5371b;
 }
 
 @layer base {
-  button, [role="button"] {
-    cursor: pointer;
-  }
+	button,
+	[role='button'] {
+		cursor: pointer;
+	}
+
+	.flex-pass {
+		@apply flex shrink flex-col overflow-y-auto;
+	}
 }
 @source "../node_modules/flowbite-svelte/dist";
 
 .h-modal {
-    z-index: 9999;
+	z-index: 9999;
 }
 .fixed.inset-0 {
-    z-index: 9999;
-    @apply bg-black/15!;
+	z-index: 9999;
+	@apply bg-black/15!;
 }
 
 b.hi {
-    @apply bg-amber-100;
+	@apply bg-amber-100;
 }
 
 b.dem {
-    @apply text-neutral-700 font-normal;
+	@apply font-normal text-neutral-700;
 }

@@ -1,8 +1,8 @@
 // place files you want to import through the `$lib` alias in this folder.
 
 type Address = {
-	x: number;
-	y: number;
+	lat: number;
+	lng: number;
 	name: string;
 	err: null;
 	car?: number;
@@ -170,8 +170,8 @@ export class Data {
 			// process addresses
 			if (row[address_idx] === '') logThrow(`!Address for row ${i + 2} is blank!`);
 			d.addresses.push({
-				x: NaN,
-				y: NaN,
+				lat: NaN,
+				lng: NaN,
 				name: row[address_idx],
 				err: null,
 				car: car ? i : undefined,
@@ -201,8 +201,8 @@ export class Data {
 							`}WARN: Fetched bounds for '${a.name}' too large! Possible mismatch.\n} └─(Fetched '${res[0].label}')`
 						);
 					}
-					a.x = res[0].x;
-					a.y = res[0].y;
+					a.lng = res[0].x;
+					a.lat = res[0].y;
 				})()
 			)
 		);

@@ -1,14 +1,21 @@
 <script lang="ts">
-	import { Data } from '$lib';
+	import { Data, distanceBetweenPoints } from '$lib';
 	import { Button, Modal, Label, Input, Card } from 'flowbite-svelte';
-	import { InfoCircleOutline, ArrowLeftOutline, ArrowRightOutline } from 'flowbite-svelte-icons';
+	import {
+		InfoCircleOutline,
+		ArrowLeftOutline,
+		ArrowRightOutline,
+		ArrowDownOutline,
+		ArrowUpOutline
+	} from 'flowbite-svelte-icons';
 	import type { LatLngTuple } from 'leaflet';
 	import Papa from 'papaparse';
 	import type { Icons } from '$lib/icons';
 	import { local_store } from '$lib/local_store';
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	import type { GeoSearchControl } from 'leaflet-geosearch';
-	import type { Writable } from 'svelte/store';
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	import { derived, type Writable } from 'svelte/store';
 
 	let L: typeof import('leaflet');
 	let icons: Icons;
@@ -55,7 +62,7 @@
 	let allocation: Writable<string[][]> = local_store('allocation', []);
 	let total_allocated: Set<string> = new Set();
 
-	let valid_spreadsheet_id = $derived($spreadsheet_id.length == 44);
+	let valid_spreadsheet_id: Writable<boolean> = $derived($spreadsheet_id.length == 44);
 
 	let data: Data | undefined = $state();
 	let log = $state('');
@@ -90,7 +97,7 @@
 		let i = 0;
 		data.addresses.map((a) => {
 			if (map) {
-				markers[i] = L.marker([a.y, a.x], {
+				markers[i] = L.marker([a.lat, a.lng], {
 					title: a.name,
 					icon: icons.getIcon(data as Data, total_allocated, i, i++ == data?.cars[0].address)
 				}).addTo(map);
@@ -149,17 +156,41 @@
 
 	let selectedCar = $state(0);
 	let prevCar = 0;
+	let closestChildren: { distance: number; address: number; name: string }[] = $state([]);
 	$effect(() => {
 		if (!data) return;
 
 		let s = selectedCar; // svelte doesnt detect selectedCar if we just index with it >:(
 		let address = data.cars[selectedCar + s - s].address;
 
+		let { lat: lat0, lng: lng0 } = data.addresses[address];
+		if (lat0 !== undefined && lng0 !== undefined) {
+			let cc = [];
+			for (const [name, d] of Object.entries(data.children)) {
+				let { lat, lng } = data.addresses[d.address];
+
+				cc.push({
+					distance: distanceBetweenPoints(lat0, lng0, lat, lng),
+					address: d.address,
+					name
+				});
+			}
+			closestChildren = cc.sort((a, b) => a.distance - b.distance);
+		}
+
 		updateIcon(address, true);
 		const prevAddress = data.cars[prevCar].address;
 		updateIcon(prevAddress, false);
 		prevCar = selectedCar;
 	});
+
+	function mouseenter(address: number) {
+		markers[address].setOpacity(0.8);
+	}
+
+	function mouseleave(address: number) {
+		markers[address].setOpacity(1.0);
+	}
 </script>
 
 <svelte:window
@@ -220,71 +251,107 @@
 	<p>The <b>Hollow Markers</b> represent addresses that have cars.</p>
 </Modal>
 
-<div class="flex flex-row">
-	<div class="flex basis-64 flex-col p-4 lg:basis-96">
-		<div class="flex items-stretch">
-			<Button
-				class="grow rounded-r-none"
-				color="alternative"
-				on:click={() => ($import_modal = true)}
-			>
-				Import from Google Sheet
-			</Button>
-			<Button class="rounded-l-none p-2!" on:click={() => ($info_modal = true)}>
-				<InfoCircleOutline />
-			</Button>
-		</div>
-		<div class="my-2 flex items-center justify-around">
-			<Button
-				class="p-2"
-				color="alternative"
-				on:click={() => (selectedCar -= +(selectedCar > 0))}
-				disabled={selectedCar <= 0}
-			>
-				<ArrowLeftOutline />
-			</Button>
-			<p class="grow text-center">Car {selectedCar + 1}</p>
-			<Button
-				class="p-2"
-				color="alternative"
-				on:click={() => (selectedCar += data ? +(selectedCar < data.cars.length - 1) : 0)}
-				disabled={selectedCar >= (data ? data.cars.length - 1 : Infinity)}
-			>
-				<ArrowRightOutline />
-			</Button>
-		</div>
-		<div class="flex shrink flex-col overflow-scroll">
-			<Card class="h-56 overflow-y-scroll">
-				<p class="text-lg text-neutral-700">
-					{data?.addresses[data?.cars[selectedCar]?.address || 0].name}
-				</p>
-				<!-- SHOW PARENTS -->
-				{#if data?.cars[selectedCar]?.parents}
-					{#each data?.cars[selectedCar].parents as parent (parent)}
-						{@const p = data?.parents[parent]}
-						<p class="mt-2 text-lg text-neutral-700">{parent}</p>
-						<ul>
-							{#each Object.entries(p?.data || {}) as [key, value] (key)}
-								<li class="text-neutral-600"><b>{key}:</b> {value}</li>
-							{/each}
-						</ul>
-					{/each}
-				{/if}
-			</Card>
-			{#if $allocation[selectedCar] && data?.cars[selectedCar] && $allocation}
-				<!-- CAPACITY -->
-				{@const car = data.cars[selectedCar]}
-				<p class="text-lg"><b>Seats:</b> {$allocation[selectedCar].length} / {car.capacity}</p>
-
-				<!-- SHOW ALLOCATED SEATS -->
-				{#each $allocation[selectedCar] as child (child)}
-					<p class="text-neutral-700 select-none">{child}</p>
-				{/each}
-
-				<!-- SHOW CARDS FOR CLOSEST CHILDREN -->
-				<div class="mt-4 overflow-y-scroll"></div>
-			{/if}
-		</div>
+<div
+	class="
+    grid max-h-screen grid-flow-col grid-cols-[16rem_1fr] grid-rows-[auto_auto_auto_1fr]
+    lg:grid-cols-[24rem_1fr]"
+>
+	<div class="m-2 my-1 flex items-stretch">
+		<Button class="grow rounded-r-none" color="alternative" on:click={() => ($import_modal = true)}>
+			Import from Google Sheet
+		</Button>
+		<Button class="rounded-l-none p-2!" on:click={() => ($info_modal = true)}>
+			<InfoCircleOutline />
+		</Button>
 	</div>
-	<main class="h-[100vh] grow" use:mapAction></main>
+	<div class="m-2 my-1 flex items-center justify-around">
+		<Button
+			class="p-2"
+			color="alternative"
+			on:click={() => (selectedCar -= +(selectedCar > 0))}
+			disabled={selectedCar <= 0}
+		>
+			<ArrowLeftOutline />
+		</Button>
+		<p class="grow text-center">Car {selectedCar + 1}</p>
+		<Button
+			class="p-2"
+			color="alternative"
+			on:click={() => (selectedCar += data ? +(selectedCar < data.cars.length - 1) : 0)}
+			disabled={selectedCar >= (data ? data.cars.length - 1 : Infinity)}
+		>
+			<ArrowRightOutline />
+		</Button>
+	</div>
+	<div class="m-2 my-1">
+		<Card class="h-56 overflow-y-scroll shadow-none">
+			<p class="text-lg text-neutral-700">
+				{data?.addresses[data?.cars[selectedCar]?.address || 0].name}
+			</p>
+			<!-- SHOW PARENTS -->
+			{#if data?.cars[selectedCar]?.parents}
+				{#each data?.cars[selectedCar].parents as parent (parent)}
+					{@const p = data?.parents[parent]}
+					<p class="mt-2 text-lg text-neutral-700">{parent}</p>
+					<ul>
+						{#each Object.entries(p?.data || {}) as [key, value] (key)}
+							<li class="text-neutral-600"><b>{key}:</b> {value}</li>
+						{/each}
+					</ul>
+				{/each}
+			{/if}
+		</Card>
+	</div>
+	<div class="flex-pass px-2">
+		{#if $allocation[selectedCar] && data?.cars[selectedCar] && $allocation}
+			{@const car = data.cars[selectedCar]}
+			<!-- CAPACITY -->
+			<p class="text-lg"><b>Seats:</b> {$allocation[selectedCar].length} / {car.capacity}</p>
+			<!-- SHOW ALLOCATED SEATS -->
+			{#each $allocation[selectedCar] as child (child)}
+			    {@const address = data.children[child].address}
+				<Card
+					class="my-1 flex flex-row bg-neutral-100 p-0! shadow-none"
+					on:mouseenter={() => mouseenter(address)}
+					on:mouseleave={() => mouseleave(address)}
+				>
+					<div class="min-w-0 grow p-2">
+						<h3 class="min-w-0 font-bold text-nowrap text-ellipsis text-neutral-800">
+							{child}
+						</h3>
+						<p class="min-w-0 overflow-hidden text-nowrap text-ellipsis text-neutral-800">
+							{data.addresses[address].name}
+						</p>
+					</div>
+					<Button class="basis-0 px-2 " color="alternative">
+						<ArrowDownOutline />
+					</Button>
+				</Card>
+			{/each}
+
+			<!-- SHOW CLOSEST CHILDREN -->
+			{#each closestChildren as child (child)}
+				{#if !total_allocated.has(child.name)}
+					<Card
+						class="my-1 flex flex-row p-0! shadow-none"
+						on:mouseenter={() => mouseenter(child.address)}
+						on:mouseleave={() => mouseleave(child.address)}
+					>
+						<div class="min-w-0 grow p-2">
+							<h3 class="min-w-0 font-bold text-nowrap text-ellipsis text-neutral-800">
+								{child.name}
+							</h3>
+							<p class="min-w-0 overflow-hidden text-nowrap text-ellipsis text-neutral-800">
+								{data.addresses[child.address].name}
+							</p>
+						</div>
+						<Button class="basis-0 px-2 " color="alternative">
+							<ArrowUpOutline />
+						</Button>
+					</Card>
+				{/if}
+			{/each}
+		{/if}
+	</div>
+	<main class="row-span-5 h-[100vh] grow" use:mapAction></main>
 </div>
