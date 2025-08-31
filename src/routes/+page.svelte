@@ -28,12 +28,13 @@
 			subdomains: 'abcd'
 		}).addTo(map);
 		map.addControl(
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			new (GeoSearchControl as any)({
 				style: 'bar',
 				provider: new EsriProvider(),
 				showMarker: false
 			})
-		); // eslint-disable-line
+		);
 	}
 
 	function mapAction(container: HTMLElement) {
@@ -99,7 +100,7 @@
 					console.error(e);
 				}
 				selectedCar = 0;
-				
+
 			},
 			error: () => {
 				log += '!Error fetching google sheet\n';
@@ -112,7 +113,7 @@
 	$effect(() => {
 		let s = selectedCar; // svelte doesnt detect selectedCar if we just index with it >:(
 		let address = data?.cars[selectedCar + s - s].address;
-		if (data && address !== undefined) {
+		if (data && address !== undefined && markers[address]) {
 			markers[address].setIcon(icons.getIcon(data, address, true));
 
 			const prevAddress = data.cars[prevCar].address;
@@ -127,6 +128,7 @@
 		if (map) map.invalidateSize();
 	}}
 />
+<!-- INFO MODAL google sheet -->
 <Modal class="prose prose-p:my-2" bind:open={$import_modal} autoclose outsideclose>
 	<p class="text-center">
 		<code
@@ -167,6 +169,7 @@
 			></pre>
 	</div>
 </Modal>
+<!-- INFO MODAL main page -->
 <Modal class="prose prose-p:my-2" bind:open={$info_modal} autoclose outsideclose>
 	<p>
 		The <b>Blue Markers</b> represent addresses which have residents that have not been allocated to
@@ -213,6 +216,7 @@
 		</div>
 		<div class="flex shrink flex-col overflow-scroll">
 			<p class="mb-3 text-lg text-neutral-700">{data?.addresses[data?.cars[selectedCar]?.address || 0].name}</p>
+			<!-- SHOW PARENTS -->
 			{#if data?.cars[selectedCar]?.parents}
 				{#each data?.cars[selectedCar].parents as parent (parent)}
 					{@const p = data?.parents[parent]}
@@ -223,6 +227,22 @@
 						{/each}
 					</ul>
 				{/each}
+			{/if}
+			<hr class="my-4" />
+			{#if data?.cars[selectedCar]?.capacity}
+			    <!-- CAPACITY -->
+			    {@const car = data.cars[selectedCar]}
+				<p class="text-lg"><b>Seats:</b> {car.allocated.size} / {car.capacity}</p>
+
+				<!-- SHOW ALLOCATED SEATS -->
+				{#each car.allocated as child (child)}
+					<p class="text-neutral-700 select-none">{child}</p>
+				{/each}
+				
+				<!-- SHOW CARDS FOR CLOSEST CHILDREN -->
+				<div class="mt-4 overflow-y-scroll">
+				
+				</div>
 			{/if}
 		</div>
 	</div>
