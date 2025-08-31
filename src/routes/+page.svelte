@@ -6,6 +6,7 @@
 	import Papa from 'papaparse';
 	import type { Icons } from '$lib/icons';
 	import { local_store } from '$lib/local_store';
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	import type { GeoSearchControl } from 'leaflet-geosearch';
 
 	let L: typeof import('leaflet');
@@ -26,7 +27,13 @@
 		        &copy;<a href="https://carto.com/attributions" target="_blank">CARTO</a>`,
 			subdomains: 'abcd'
 		}).addTo(map);
-		map.addControl(new (GeoSearchControl as any)({ style: 'bar', provider: new EsriProvider(), showMarker: false })); // eslint-disable-line
+		map.addControl(
+			new (GeoSearchControl as any)({
+				style: 'bar',
+				provider: new EsriProvider(),
+				showMarker: false
+			})
+		); // eslint-disable-line
 	}
 
 	function mapAction(container: HTMLElement) {
@@ -45,8 +52,7 @@
 	let spreadsheet_id = local_store('spreadsheet_id', '');
 	let valid_spreadsheet_id = $derived($spreadsheet_id.length == 44);
 
-	let data: Data | undefined;
-	let data_key = $state(false);
+	let data: Data | undefined = $state();
 
 	let log = $state('');
 	$effect(() => {
@@ -80,7 +86,7 @@
 								if (map) {
 									markers[i] = L.marker([a.y, a.x], {
 										title: a.name,
-										icon: icons.getIcon(data as Data, i, i++ == data.cars[0].address)
+										icon: icons.getIcon(data as Data, i, i++ == data?.cars[0].address)
 									}).addTo(map);
 								} else throw 'Map not initialized';
 							});
@@ -92,9 +98,8 @@
 				} catch (e) {
 					console.error(e);
 				}
-				data_key = true;
 				selectedCar = 0;
-				prevCar = 0;
+				
 			},
 			error: () => {
 				log += '!Error fetching google sheet\n';
@@ -207,21 +212,18 @@
 			</Button>
 		</div>
 		<div class="flex shrink flex-col overflow-scroll">
-			{#key data_key}
-				{@const car = data?.cars[selectedCar]}
-				<p class="mb-3 text-lg text-neutral-700">{data?.addresses[car?.address || 0].name}</p>
-				{#if car?.parents}
-					{#each car.parents as parent (parent)}
-						{@const p = data?.parents[parent]}
-						<p class="mt-2 text-lg text-neutral-700">{parent}</p>
-						<ul>
-							{#each Object.entries(p?.data || {}) as [key, value] (key)}
-								<li class="text-neutral-600"><b>{key}:</b> {value}</li>
-							{/each}
-						</ul>
-					{/each}
-				{/if}
-			{/key}
+			<p class="mb-3 text-lg text-neutral-700">{data?.addresses[data?.cars[selectedCar]?.address || 0].name}</p>
+			{#if data?.cars[selectedCar]?.parents}
+				{#each data?.cars[selectedCar].parents as parent (parent)}
+					{@const p = data?.parents[parent]}
+					<p class="mt-2 text-lg text-neutral-700">{parent}</p>
+					<ul>
+						{#each Object.entries(p?.data || {}) as [key, value] (key)}
+							<li class="text-neutral-600"><b>{key}:</b> {value}</li>
+						{/each}
+					</ul>
+				{/each}
+			{/if}
 		</div>
 	</div>
 	<main class="h-[100vh] grow" use:mapAction></main>

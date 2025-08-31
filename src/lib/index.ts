@@ -197,13 +197,13 @@ export function areaOfBounds(bounds: [[number, number], [number, number]]): numb
 	const lon2 = toRadians(northEast[1]);
 
 	// Calculate the differences
-	const dLat = lat2 - lat1;
-	const dLon = lon2 - lon1;
+	const ΔLat = lat2 - lat1;
+	const ΔLon = lon2 - lon1;
 
 	// Calculate the area using the Haversine formula approximation
 	const a =
-		Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-		Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+		Math.sin(ΔLat / 2) * Math.sin(ΔLat / 2) +
+		Math.cos(lat1) * Math.cos(lat2) * Math.sin(ΔLon / 2) * Math.sin(ΔLon / 2);
 
 	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
